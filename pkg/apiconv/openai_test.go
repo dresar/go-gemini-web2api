@@ -323,3 +323,22 @@ func TestResponsesFunctionOutputUsesCallID(t *testing.T) {
 		t.Errorf("expected call_id-labelled tool result, got:\n%s", prompt)
 	}
 }
+
+func TestChatCompletionWithThought(t *testing.T) {
+	res := ChatCompletionWithThought("id-123", "gemini-3.1-pro-thinking", "prompt", "final text", "thinking thought", nil)
+	b, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj map[string]any
+	json.Unmarshal(b, &obj)
+	choices := obj["choices"].([]any)
+	msg := choices[0].(map[string]any)["message"].(map[string]any)
+	if msg["reasoning_content"] != "thinking thought" {
+		t.Errorf("got reasoning_content = %v, want 'thinking thought'", msg["reasoning_content"])
+	}
+	if msg["content"] != "final text" {
+		t.Errorf("got content = %v, want 'final text'", msg["content"])
+	}
+}
+

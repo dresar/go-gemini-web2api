@@ -390,19 +390,34 @@ func (c *Client) newRequest(ctx context.Context, body string, model *AvailableMo
 	return req, nil
 }
 
+// Response holds the generated text and any extended thinking / reasoning thoughts.
+type Response struct {
+	Text    string
+	Thought string
+}
+
 // Generate sends a prompt and returns the final response text (blocking, with retry).
 func (c *Client) Generate(ctx context.Context, p GenParams) (string, error) {
+	resp, err := c.GenerateResponse(ctx, p)
+	if err != nil {
+		return "", err
+	}
+	return resp.Text, nil
+}
+
+// GenerateResponse sends a prompt and returns the full Response including any extended thinking thoughts.
+func (c *Client) GenerateResponse(ctx context.Context, p GenParams) (Response, error) {
 	images := c.uploadImages(ctx, p.Images)
 	body, reqUUID, err := c.buildBody(p, images)
 	if err != nil {
-		return "", err
+		return Response{}, err
 	}
 
 	var lastErr error
 	for attempt := 0; attempt < c.cfg.RetryAttempts; attempt++ {
 		req, err := c.newRequest(ctx, body, p.Model, reqUUID)
 		if err != nil {
-			return "", err
+			return Response{}, err
 		}
 		resp, err := c.http.Do(req)
 		if err == nil {
@@ -414,8 +429,8 @@ func (c *Client) Generate(ctx context.Context, p GenParams) (string, error) {
 			default:
 				// An empty body is treated as a (retryable) failure rather than a
 				// silent empty answer.
-				if text := extractResponseText(string(raw)); text != "" {
-					return text, nil
+				if r := extractResponse(string(raw)); r.Text != "" || r.Thought != "" {
+					return r, nil
 				}
 				err = ErrEmptyResponse
 			}
@@ -426,21 +441,35 @@ func (c *Client) Generate(ctx context.Context, p GenParams) (string, error) {
 				"attempt", attempt+1, "max", c.cfg.RetryAttempts, "err", err)
 			select {
 			case <-ctx.Done():
-				return "", ctx.Err()
+				return Response{}, ctx.Err()
 			case <-time.After(time.Duration(c.cfg.RetryDelaySec) * time.Second):
 			}
 		}
 	}
 	// ErrEmptyResponse is already self-descriptive; don't double-wrap it.
 	if errors.Is(lastErr, ErrEmptyResponse) {
-		return "", ErrEmptyResponse
+		return Response{}, ErrEmptyResponse
 	}
-	return "", fmt.Errorf("gemini request failed: %w", lastErr)
+	return Response{}, fmt.Errorf("gemini request failed: %w", lastErr)
+}
+
+// StreamDelta carries incremental text and/or thought delta.
+type StreamDelta struct {
+	Text    string
+	Thought string
 }
 
 // GenerateStream sends a prompt and invokes emit for each incremental text delta.
-// Gemini sends cumulative text per chunk, so deltas are computed against prevText.
 func (c *Client) GenerateStream(ctx context.Context, p GenParams, emit func(delta string)) error {
+	return c.GenerateStreamResponse(ctx, p, func(d StreamDelta) {
+		if d.Text != "" {
+			emit(d.Text)
+		}
+	})
+}
+
+// GenerateStreamResponse sends a prompt and invokes emit for each incremental text or thought delta.
+func (c *Client) GenerateStreamResponse(ctx context.Context, p GenParams, emit func(delta StreamDelta)) error {
 	images := c.uploadImages(ctx, p.Images)
 	body, reqUUID, err := c.buildBody(p, images)
 	if err != nil {
@@ -460,14 +489,27 @@ func (c *Client) GenerateStream(ctx context.Context, p GenParams, emit func(delt
 	// batchexecute lines routinely exceed that.
 	reader := bufio.NewReader(resp.Body)
 	prevText := ""
+	prevThought := ""
 	for {
 		line, readErr := reader.ReadString('\n')
 		if line != "" {
-			if text, ok := latestText(line); ok && len(text) > len(prevText) {
-				delta := cleanGeminiText(runeDelta(prevText, text))
-				prevText = text
-				if delta != "" {
-					emit(delta)
+			texts, thoughts := parseWrbLineWithThought(line)
+			for _, th := range thoughts {
+				if len(th) > len(prevThought) {
+					thoughtDelta := cleanGeminiText(runeDelta(prevThought, th))
+					prevThought = th
+					if thoughtDelta != "" {
+						emit(StreamDelta{Thought: thoughtDelta})
+					}
+				}
+			}
+			for _, text := range texts {
+				if len(text) > len(prevText) {
+					textDelta := cleanGeminiText(runeDelta(prevText, text))
+					prevText = text
+					if textDelta != "" {
+						emit(StreamDelta{Text: textDelta})
+					}
 				}
 			}
 		}
@@ -503,24 +545,38 @@ func runeDelta(prev, cur string) string {
 	return cur[i:]
 }
 
-// extractResponseText parses a full StreamGenerate response and returns the final
-// text. Gemini streams cumulative snapshots, so the longest candidate is the
-// complete answer (more robust than picking the last non-empty one).
-func extractResponseText(raw string) string {
-	longest := ""
+// extractResponse parses a full StreamGenerate response and returns the final
+// text and extended reasoning thoughts.
+func extractResponse(raw string) Response {
+	longestText := ""
+	longestThought := ""
 	for _, line := range strings.Split(raw, "\n") {
-		for _, t := range parseWrbLine(line) {
-			if len(t) > len(longest) {
-				longest = t
+		texts, thoughts := parseWrbLineWithThought(line)
+		for _, t := range texts {
+			if len(t) > len(longestText) {
+				longestText = t
+			}
+		}
+		for _, th := range thoughts {
+			if len(th) > len(longestThought) {
+				longestThought = th
 			}
 		}
 	}
-	return cleanGeminiText(longest)
+	return Response{
+		Text:    cleanGeminiText(longestText),
+		Thought: cleanGeminiText(longestThought),
+	}
+}
+
+// extractResponseText parses a full StreamGenerate response and returns the final text.
+func extractResponseText(raw string) string {
+	return extractResponse(raw).Text
 }
 
 // latestText returns the longest text candidate from a single streamed line.
 func latestText(line string) (string, bool) {
-	texts := parseWrbLine(line)
+	texts, _ := parseWrbLineWithThought(line)
 	best := ""
 	for _, t := range texts {
 		if len(t) > len(best) {
@@ -531,53 +587,64 @@ func latestText(line string) (string, bool) {
 }
 
 // parseWrbLine extracts text strings from a batchexecute "wrb.fr" response line.
-// The line is JSON like [["wrb.fr", _, "<inner-json>", ...], ...]; the inner JSON
-// nests the model text at inner2[4][*][1][*].
 func parseWrbLine(line string) []string {
+	texts, _ := parseWrbLineWithThought(line)
+	return texts
+}
+
+// parseWrbLineWithThought extracts text strings and thought strings from a batchexecute "wrb.fr" response line.
+func parseWrbLineWithThought(line string) (texts []string, thoughts []string) {
 	if !strings.Contains(line, `"wrb.fr"`) || len(line) < 200 {
-		return nil
+		return nil, nil
 	}
 	var arr []any
 	if err := json.Unmarshal([]byte(line), &arr); err != nil {
-		return nil
+		return nil, nil
 	}
 	first, ok := indexSlice(arr, 0)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	innerStr, ok := indexString(first, 2)
 	if !ok || len(innerStr) < 50 {
-		return nil
+		return nil, nil
 	}
 	var inner2 any
 	if err := json.Unmarshal([]byte(innerStr), &inner2); err != nil {
-		return nil
+		return nil, nil
 	}
 	inner2Slice, ok := inner2.([]any)
 	if !ok || len(inner2Slice) <= 4 {
-		return nil
+		return nil, nil
 	}
 	parts, ok := inner2Slice[4].([]any)
 	if !ok {
-		return nil
+		return nil, nil
 	}
-	var out []string
 	for _, part := range parts {
 		ps, ok := part.([]any)
 		if !ok || len(ps) <= 1 {
 			continue
 		}
-		texts, ok := ps[1].([]any)
-		if !ok {
-			continue
+		if ts, ok := ps[1].([]any); ok {
+			for _, t := range ts {
+				if s, ok := t.(string); ok && s != "" {
+					texts = append(texts, s)
+				}
+			}
 		}
-		for _, t := range texts {
-			if s, ok := t.(string); ok && s != "" {
-				out = append(out, s)
+		// ps[37] carries extended thinking / reasoning thoughts
+		if len(ps) > 37 && ps[37] != nil {
+			if t37, ok := ps[37].([]any); ok && len(t37) > 0 {
+				if t0, ok := t37[0].([]any); ok && len(t0) > 0 {
+					if s, ok := t0[0].(string); ok && s != "" {
+						thoughts = append(thoughts, s)
+					}
+				}
 			}
 		}
 	}
-	return out
+	return texts, thoughts
 }
 
 // indexSlice returns arr[i] as a []any if possible.

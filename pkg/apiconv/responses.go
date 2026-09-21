@@ -19,11 +19,19 @@ const modelCreated = 1700000000
 
 // ChatCompletion builds a non-streaming /v1/chat/completions response.
 func ChatCompletion(id, model, prompt, text string, toolCalls []ToolCall) any {
+	return ChatCompletionWithThought(id, model, prompt, text, "", toolCalls)
+}
+
+// ChatCompletionWithThought builds a non-streaming /v1/chat/completions response with reasoning_content.
+func ChatCompletionWithThought(id, model, prompt, text, thought string, toolCalls []ToolCall) any {
 	finish := "stop"
 	if len(toolCalls) > 0 {
 		finish = "tool_calls"
 	}
 	msg := outMessage{Role: "assistant", Content: contentPtr(text), ToolCalls: toolCalls}
+	if thought != "" {
+		msg.ReasoningContent = &thought
+	}
 	return chatCompletion{
 		ID: id, Object: "chat.completion", Created: now(), Model: model,
 		Choices: []chatChoice{{Index: 0, Message: &msg, FinishReason: &finish}},
@@ -37,6 +45,15 @@ func ChatChunk(id string, created int64, model, content string) any {
 	return chatChunk{
 		ID: id, Object: "chat.completion.chunk", Created: created, Model: model,
 		Choices: []chunkChoice{{Index: 0, Delta: chunkDelta{Content: &c}, FinishReason: nil}},
+	}
+}
+
+// ChatChunkReasoning builds a streaming chat.completion.chunk carrying one reasoning delta.
+func ChatChunkReasoning(id string, created int64, model, reasoning string) any {
+	r := reasoning
+	return chatChunk{
+		ID: id, Object: "chat.completion.chunk", Created: created, Model: model,
+		Choices: []chunkChoice{{Index: 0, Delta: chunkDelta{ReasoningContent: &r}, FinishReason: nil}},
 	}
 }
 
@@ -176,9 +193,10 @@ type chatChoice struct {
 }
 
 type outMessage struct {
-	Role      string     `json:"role"`
-	Content   *string    `json:"content"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	Role             string     `json:"role"`
+	Content          *string    `json:"content"`
+	ReasoningContent *string    `json:"reasoning_content,omitempty"`
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 }
 
 type chatChunk struct {
@@ -198,9 +216,10 @@ type chunkChoice struct {
 // chunkDelta is a streaming delta. All fields use omitempty so a content delta
 // is {"content":"..."} and the terminating delta is {}.
 type chunkDelta struct {
-	Role      string     `json:"role,omitempty"`
-	Content   *string    `json:"content,omitempty"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	Role             string     `json:"role,omitempty"`
+	Content          *string    `json:"content,omitempty"`
+	ReasoningContent *string    `json:"reasoning_content,omitempty"`
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 }
 
 type usage struct {

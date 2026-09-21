@@ -184,11 +184,13 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Blocking path (also used for tool calling, which needs the full response).
-	text, err := s.client.Generate(r.Context(), p)
+	res, err := s.client.GenerateResponse(r.Context(), p)
 	if err != nil {
 		sendError(w, http.StatusBadGateway, "upstream error: "+err.Error())
 		return
 	}
+	text := res.Text
+	thought := res.Thought
 	var toolCalls []apiconv.ToolCall
 	if toolsActive && text != "" {
 		text, toolCalls = apiconv.ParseToolCalls(text)
@@ -206,7 +208,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusOK, apiconv.ChatCompletion(cid, m.Name, prompt, text, toolCalls))
+	sendJSON(w, http.StatusOK, apiconv.ChatCompletionWithThought(cid, m.Name, prompt, text, thought, toolCalls))
 }
 
 // streamChat performs true token streaming for a chat completion.
@@ -215,7 +217,7 @@ func (s *Server) streamChat(ctx context.Context, w http.ResponseWriter, cid, mod
 	var f http.Flusher
 	headerWritten := false
 
-	emit := func(text string) {
+	emit := func(d gemini.StreamDelta) {
 		if !headerWritten {
 			fl, ok := openSSE(w)
 			if !ok {
@@ -224,10 +226,15 @@ func (s *Server) streamChat(ctx context.Context, w http.ResponseWriter, cid, mod
 			f = fl
 			headerWritten = true
 		}
-		writeSSEData(w, f, apiconv.ChatChunk(cid, created, model, text))
+		if d.Thought != "" {
+			writeSSEData(w, f, apiconv.ChatChunkReasoning(cid, created, model, d.Thought))
+		}
+		if d.Text != "" {
+			writeSSEData(w, f, apiconv.ChatChunk(cid, created, model, d.Text))
+		}
 	}
 
-	err := s.client.GenerateStream(ctx, p, emit)
+	err := s.client.GenerateStreamResponse(ctx, p, emit)
 	if !headerWritten {
 		// Nothing was streamed yet, so a normal HTTP error status is still possible.
 		// No deltas and no error means the upstream produced no content.

@@ -79,6 +79,18 @@ func (c *Client) ResolveModel(name string) (*AvailableModel, error) {
 	}
 	c.modelMu.Lock()
 	m, ok := c.models[name]
+	if !ok {
+		if strings.HasSuffix(name, "-thinking") {
+			base := strings.TrimSuffix(name, "-thinking")
+			m, ok = c.models[base]
+		}
+		if !ok {
+			switch name {
+			case "gemini-thinking", "gemini-extended", "gemini-deep-think", "thinking", "extended":
+				m, ok = c.models["gemini-3.1-pro"]
+			}
+		}
+	}
 	c.modelMu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("unknown model: %q", name)
