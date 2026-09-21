@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+set -e
+
+DIR="/root/go-gemini-web2api"
+BIN="$DIR/go-gemini-web2api"
+COOKIE="$DIR/cookie.txt"
+PIDFILE="$DIR/gemini.pid"
+LOGFILE="$DIR/gemini.log"
+LAST_ACTIVE="$DIR/gemini.last_active"
+PORT=8081
+BASE_URL="http://127.0.0.1:$PORT"
+
+is_running() {
+    if [ -f "$PIDFILE" ]; then
+        PID=$(cat "$PIDFILE" 2>/dev/null || true)
+        if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    ROGUE_PID=$(lsof -t -i :$PORT 2>/dev/null || true)
+    if [ -n "$ROGUE_PID" ]; then
+        echo "$ROGUE_PID" > "$PIDFILE"
+        return 0
+    fi
+    return 1
+}
+
+touch_activity() {
+    date +%s > "$LAST_ACTIVE"
+}
+
+start_server() {
+    if is_running; then
+        echo "Gemini Web2API is already running (PID: $(cat "$PIDFILE"))."
+        touch_activity
+        return 0
+    fi
+
+    echo "Starting Gemini Web2API (On-Demand Mode)..."
+    cd "$DIR"
+    nohup "$BIN" -cookie-file "$COOKIE" -listen "127.0.0.1:$PORT" > "$LOGFILE" 2>&1 &
+    PID=$!
+    echo $PID > "$PIDFILE"
+    touch_activity
+
+    local count=0
+    while ! curl -s "$BASE_URL/" >/dev/null 2>&1; do
+        sleep 0.5
+        count=$((count+1))
+        if [ $count -gt 30 ]; then
+            echo "ERROR: Server failed to start within 15 seconds. Log:"
+            tail -n 20 "$LOGFILE"
+            kill -9 $PID 2>/dev/null || true
+            rm -f "$PIDFILE"
+            return 1
+        fi
+    done
+
+    echo "Gemini Web2API ready at $BASE_URL (PID: $PID)"
+}
+
+stop_server() {
+    if is_running; then
+        PID=$(cat "$PIDFILE")
+        echo "Stopping Gemini Web2API (PID: $PID) to save CPU and RAM..."
+        kill "$PID" 2>/dev/null || true
+        local count=0
+        while kill -0 "$PID" 2>/dev/null; do
+            sleep 0.5
+            count=$((count+1))
+            if [ $count -gt 10 ]; then
+                kill -9 "$PID" 2>/dev/null || true
+                break
+            fi
+        done
+        rm -f "$PIDFILE"
+        echo "Gemini Web2API stopped. Memory and CPU completely freed (0% CPU / 0 RAM)."
+    else
+        echo "Gemini Web2API is already stopped."
+        rm -f "$PIDFILE"
+    fi
+}
+
+status_server() {
+    if is_running; then
+        PID=$(cat "$PIDFILE")
+        MEM=$(ps -p "$PID" -o rss= 2>/dev/null | awk '{printf "%.1f MB", $1/1024}' || echo "N/A")
+        CPU=$(ps -p "$PID" -o %cpu= 2>/dev/null || echo "N/A")
+        echo "Status: RUNNING"
+        echo "PID: $PID"
+        echo "RAM Usage: $MEM"
+        echo "CPU Usage: $CPU%"
+        echo "Base URL: $BASE_URL"
+    else
+        echo "Status: STOPPED (Zero CPU / Zero RAM)"
+    fi
+}
+
+ask_prompt() {
+    local PROMPT="$1"
+    local MODEL="${2:-gemini-3.1-pro-thinking}"
+    local ONESHOT="${3:-true}"
+
+    if [ -z "$PROMPT" ]; then
+        echo "Usage: gemini-ctl ask \"<prompt>\" [model] [oneshot: true|false]"
+        exit 1
+    fi
+
+    local WAS_RUNNING=true
+    if ! is_running; then
+        WAS_RUNNING=false
+        start_server
+    fi
+
+    touch_activity
+
+    local JSON_REQ
+    JSON_REQ=$(jq -n --arg m "$MODEL" --arg p "$PROMPT" '{
+        model: $m,
+        messages: [{role: "user", content: $p}]
+    }')
+
+    local RES
+    RES=$(curl -s -X POST "$BASE_URL/v1/chat/completions" \
+        -H "Content-Type: application/json" \
+        -d "$JSON_REQ")
+
+    if echo "$RES" | jq -e '.error' >/dev/null 2>&1; then
+        echo "ERROR from Gemini API:"
+        echo "$RES" | jq -r '.error.message'
+    else
+        local REASONING
+        REASONING=$(echo "$RES" | jq -r '.choices[0].message.reasoning_content // empty')
+        local CONTENT
+        CONTENT=$(echo "$RES" | jq -r '.choices[0].message.content // empty')
+
+        if [ -n "$REASONING" ]; then
+            echo "--- [THOUGHT / PENALARAN MENDALAM] ---"
+            echo "$REASONING"
+            echo "--------------------------------------"
+            echo ""
+        fi
+        echo "$CONTENT"
+    fi
+
+    touch_activity
+
+    if [ "$ONESHOT" = "true" ] || [ "$WAS_RUNNING" = "false" ]; then
+        stop_server
+    fi
+}
+
+image_prompt() {
+    local PROMPT="$1"
+    local MODEL="${2:-gemini-3.1-pro-thinking}"
+    local ONESHOT="${3:-true}"
+
+    if [ -z "$PROMPT" ]; then
+        echo "Usage: gemini-ctl image \"<prompt>\" [model] [oneshot: true|false]"
+        exit 1
+    fi
+
+    local WAS_RUNNING=true
+    if ! is_running; then
+        WAS_RUNNING=false
+        start_server
+    fi
+
+    touch_activity
+
+    local JSON_REQ
+    JSON_REQ=$(jq -n --arg m "$MODEL" --arg p "$PROMPT" '{
+        model: $m,
+        prompt: $p
+    }')
+
+    local RES
+    RES=$(curl -s -X POST "$BASE_URL/v1/images/generations" \
+        -H "Content-Type: application/json" \
+        -d "$JSON_REQ")
+
+    if echo "$RES" | jq -e '.error' >/dev/null 2>&1; then
+        echo "ERROR from Gemini API:"
+        echo "$RES" | jq -r '.error.message'
+    else
+        echo "$RES" | jq '.'
+    fi
+
+    touch_activity
+
+    if [ "$ONESHOT" = "true" ] || [ "$WAS_RUNNING" = "false" ]; then
+        stop_server
+    fi
+}
+
+auto_idle_check() {
+    local TIMEOUT_SECS="${1:-300}"
+    if is_running; then
+        if [ -f "$LAST_ACTIVE" ]; then
+            local NOW
+            NOW=$(date +%s)
+            local LAST
+            LAST=$(cat "$LAST_ACTIVE")
+            local DIFF=$((NOW - LAST))
+            if [ $DIFF -ge $TIMEOUT_SECS ]; then
+                echo "Idle timeout reached ($DIFF secs >= $TIMEOUT_SECS secs). Stopping to conserve resources."
+                stop_server
+            fi
+        fi
+    fi
+}
+
+case "$1" in
+    start)
+        start_server
+        ;;
+    stop)
+        stop_server
+        ;;
+    status)
+        status_server
+        ;;
+    ask)
+        shift
+        ask_prompt "$@"
+        ;;
+    image)
+        shift
+        image_prompt "$@"
+        ;;
+    idle-check)
+        shift
+        auto_idle_check "$@"
+        ;;
+    *)
+        echo "Usage: gemini-ctl {start|stop|status|ask \"<prompt>\" [model] [oneshot]|image \"<prompt>\" [model] [oneshot]|idle-check}"
+        exit 1
+        ;;
+esac
