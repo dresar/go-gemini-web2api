@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Web2API — Chat & Playground</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #090d16;
+      --card-bg: #121826;
+      --sidebar-bg: #0d121f;
+      --border: #232c40;
+      --text: #e2e8f0;
+      --text-muted: #8e9bb2;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --thinking-bg: rgba(139, 92, 246, 0.08);
+      --thinking-border: rgba(139, 92, 246, 0.35);
+      --thinking-text: #c4b5fd;
+      --user-bubble: #1e293b;
+      --user-border: #334155;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      background-color: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f8fafc;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: block;
+    }
+
+    .sidebar-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex-grow: 1;
+      overflow-y: auto;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .select-box {
+      width: 100%;
+      background-color: #1a2234;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .select-box:focus {
+      border-color: var(--accent);
+    }
+
+    .status-card {
+      background: #151d2f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot-green {
+      background: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    }
+
+    .sidebar-footer {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-new-chat {
+      background: rgba(59, 130, 246, 0.12);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s;
+    }
+
+    .btn-new-chat:hover {
+      background: rgba(59, 130, 246, 0.2);
+    }
+
+    /* Main Chat Section */
+    .main-chat {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(18, 24, 38, 0.7);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .active-model-title {
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .model-badge {
+      font-size: 10px;
+      background: rgba(139, 92, 246, 0.15);
+      color: #c4b5fd;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .chat-container {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .welcome-screen {
+      margin: auto;
+      max-width: 580px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    .welcome-icon {
+      font-size: 40px;
+    }
+
+    .welcome-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .welcome-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .quick-prompts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .quick-btn {
+      background: #141b2b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      text-align: left;
+      color: var(--text);
+      font-size: 12.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .quick-btn:hover {
+      border-color: var(--accent);
+      background: #1a2338;
+      transform: translateY(-1px);
+    }
+
+    /* Message Bubbles */
+    .message-row {
+      display: flex;
+      gap: 14px;
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .message-row.user {
+      justify-content: flex-end;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .avatar-user {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .avatar-bot {
+      background: linear-gradient(135deg, #10b981, #3b82f6);
+      color: white;
+    }
+
+    .message-content {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-width: 780px;
+    }
+
+    .message-bubble {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      line-height: 1.6;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .message-row.user .message-bubble {
+      background: var(--user-bubble);
+      border: 1px solid var(--user-border);
+      color: #f1f5f9;
+    }
+
+    .message-row.assistant .message-bubble {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    /* Thinking / Reasoning Accordion Box */
+    .thinking-box {
+      background: var(--thinking-bg);
+      border: 1px solid var(--thinking-border);
+      border-radius: 7px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+
+    .thinking-header {
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--thinking-text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      background: rgba(139, 92, 246, 0.05);
+    }
+
+    .thinking-header:hover {
+      background: rgba(139, 92, 246, 0.1);
+    }
+
+    .thinking-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .thinking-chevron {
+      transition: transform 0.2s;
+      font-size: 10px;
+    }
+
+    .thinking-box.collapsed .thinking-chevron {
+      transform: rotate(-90deg);
+    }
+
+    .thinking-content {
+      padding: 10px 14px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #ddd6fe;
+      border-top: 1px dashed var(--thinking-border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      white-space: pre-wrap;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .thinking-box.collapsed .thinking-content {
+      display: none;
+    }
+
+    /* Input Footer */
+    .chat-footer {
+      padding: 16px 24px 20px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+    }
+
+    .input-wrapper {
+      max-width: 860px;
+      margin: 0 auto;
+      background: #141b2b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      transition: border-color 0.15s;
+    }
+
+    .input-wrapper:focus-within {
+      border-color: var(--accent);
+    }
+
+    textarea#prompt-input {
+      flex-grow: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 14px;
+      resize: none;
+      outline: none;
+      max-height: 140px;
+      height: 40px;
+      line-height: 1.4;
+      font-family: inherit;
+    }
+
+    .btn-send {
+      background: var(--accent);
+      color: white;
+      border: none;
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    .btn-send:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-send:disabled {
+      background: #334155;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .footer-note {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    /* Markdown Code Blocks */
+    pre {
+      background: #090d16;
+      border: 1px solid #232c40;
+      border-radius: 6px;
+      padding: 10px;
+      margin: 8px 0;
+      overflow-x: auto;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="brand-icon">✨</div>
+      <div>
+        <h1 class="brand-title">Gemini Web2API</h1>
+        <span class="brand-sub">Chat & Playground UI</span>
+      </div>
+    </div>
+
+    <div class="sidebar-body">
+      <!-- Model Selector -->
+      <div class="control-group">
+        <label class="control-label" for="model-select">Pilih Model</label>
+        <select id="model-select" class="select-box">
+          <option value="gemini-3.1-pro-thinking" selected>🧠 3.1 Pro (Penalaran yang diperluas)</option>
+          <option value="gemini-3.8-flash">⚡ 3.8 Flash (Bantuan serbaguna)</option>
+          <option value="gemini-3.5-flash-lite">🚀 3.5 Flash-Lite (Jawaban tercepat)</option>
+          <option value="gemini-3.1-pro">💎 3.1 Pro (Standard)</option>
+        </select>
+      </div>
+
+      <!-- Server & Auth Status -->
+      <div class="status-card">
+        <div class="status-row">
+          <span>Status Server:</span>
+          <span style="display:flex; align-items:center; gap:5px;">
+            <span class="status-dot dot-green"></span>
+            <strong id="server-status">Online (Port 8081)</strong>
+          </span>
+        </div>
+        <div class="status-row">
+          <span>Autentikasi:</span>
+          <span style="color: #10b981; font-weight: 600;">Sesi Aktif (cookie.txt)</span>
+        </div>
+        <div class="status-row">
+          <span>Auto-Refresh:</span>
+          <span style="color: #94a3b8;">Setiap 9 Menit</span>
+        </div>
+      </div>
+
+      <!-- Features Card -->
+      <div class="status-card" style="font-size: 11.5px; line-height: 1.5;">
+        <strong style="color: #f1f5f9; margin-bottom: 2px;">⚡ Fitur Terpasang:</strong>
+        <div>• <strong>Penalaran yang diperluas</strong> (*Chain-of-Thought*)</div>
+        <div>• Streaming SSE Token real-time</div>
+        <div>• Endpoint OpenAI `/v1/chat/completions`</div>
+        <div>• Endpoint Anthropic `/v1/messages`</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button id="btn-clear" class="btn-new-chat">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14"></path>
+        </svg>
+        Obrolan Baru
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Chat Section -->
+  <main class="main-chat">
+    <header class="chat-header">
+      <div class="active-model-title">
+        <span id="active-model-name">3.1 Pro (Penalaran yang diperluas)</span>
+        <span class="model-badge">Deep Think Active</span>
+      </div>
+      <div style="font-size: 11.5px; color: var(--text-muted);">
+        Base URL: <code style="color: #60a5fa;">http://127.0.0.1:8081/v1</code>
+      </div>
+    </header>
+
+    <div id="chat-container" class="chat-container">
+      <!-- Welcome Screen -->
+      <div id="welcome-screen" class="welcome-screen">
+        <div class="welcome-icon">✨</div>
+        <h2 class="welcome-title">Gemini Web2API Playground</h2>
+        <p class="welcome-desc">
+          Antarmuka obrolan langsung untuk bereksperimen dengan model Google Gemini Web secara gratis via API proxy lokal Anda.
+        </p>
+
+        <div class="quick-prompts">
+          <button class="quick-btn" data-prompt="Pecahkan teka-teki: Petani, serigala, kambing, kubis mau menyeberang sungai dengan perahu yang hanya muat petani dan 1 bawaan. Bagaimana langkah-langkah detailnya?">
+            🧩 <strong>Teka-Teki Logika Petani</strong>
+            <div style="font-size: 11px; color: #8e9bb2; margin-top:2px;">Uji penalaran yang diperluas</div>
+          </button>
+          <button class="quick-btn" data-prompt="Berapa banyak huruf 'r' dalam kata 'strawberry'? Jelaskan langkah analisa berpikirmu secara rinci.">
+            🍓 <strong>Hitung Huruf Strawberry</strong>
+            <div style="font-size: 11px; color: #8e9bb2; margin-top:2px;">Uji ketelitian counting</div>
+          </button>
+          <button class="quick-btn" data-prompt="Buatkan program web server sederhana dengan Go (Golang) yang melayani REST API pengguna (CRUD).">
+            💻 <strong>Coding Server Golang</strong>
+            <div style="font-size: 11px; color: #8e9bb2; margin-top:2px;">Uji kemampuan coding</div>
+          </button>
+          <button class="quick-btn" data-prompt="Jelaskan konsep komputasi kuantum dalam bahasa sederhana untuk anak umur 10 tahun.">
+            🌌 <strong>Fisika Kuantum Sederhana</strong>
+            <div style="font-size: 11px; color: #8e9bb2; margin-top:2px;">Uji penyederhanaan konsep</div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="chat-footer">
+      <div class="input-wrapper">
+        <textarea id="prompt-input" placeholder="Tanyakan apapun ke Gemini (Tekan Enter untuk kirim, Shift+Enter untuk baris baru)..." rows="1"></textarea>
+        <button id="btn-send" class="btn-send" title="Kirim">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+      <div class="footer-note">
+        Didukung oleh go-gemini-web2api • Sesi mandiri Google Gemini • Reverse-engineered Web RPC
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    const chatContainer = document.getElementById('chat-container');
+    const promptInput = document.getElementById('prompt-input');
+    const btnSend = document.getElementById('btn-send');
+    const btnClear = document.getElementById('btn-clear');
+    const modelSelect = document.getElementById('model-select');
+    const welcomeScreen = document.getElementById('welcome-screen');
+    const activeModelName = document.getElementById('active-model-name');
+
+    let conversation = [];
+    let isGenerating = false;
+
+    modelSelect.addEventListener('change', () => {
+      const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+      activeModelName.textContent = selectedOption.text.replace(/^[^\s]+ /, '');
+    });
+
+    document.querySelectorAll('.quick-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        promptInput.value = btn.dataset.prompt;
+        sendMessage();
+      });
+    });
+
+    btnClear.addEventListener('click', () => {
+      conversation = [];
+      chatContainer.innerHTML = '';
+      chatContainer.appendChild(welcomeScreen);
+      welcomeScreen.style.display = 'flex';
+      promptInput.value = '';
+    });
+
+    promptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    btnSend.addEventListener('click', sendMessage);
+
+    async function sendMessage() {
+      const text = promptInput.value.trim();
+      if (!text || isGenerating) return;
+
+      if (welcomeScreen) {
+        welcomeScreen.style.display = 'none';
+      }
+
+      // Add user message
+      conversation.push({ role: 'user', content: text });
+      appendMessage('user', text);
+      promptInput.value = '';
+      promptInput.style.height = '40px';
+
+      // Prepare assistant row
+      const assistantRow = appendMessage('assistant', '', true);
+      const thinkingBox = assistantRow.querySelector('.thinking-box');
+      const thinkingContent = assistantRow.querySelector('.thinking-content');
+      const textBubble = assistantRow.querySelector('.message-bubble');
+
+      isGenerating = true;
+      btnSend.disabled = true;
+
+      try {
+        const response = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: modelSelect.value,
+            messages: conversation,
+            stream: true
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let fullText = '';
+        let fullThought = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.slice(6).trim();
+              if (dataStr === '[DONE]') break;
+              try {
+                const parsed = JSON.parse(dataStr);
+                const delta = parsed.choices?.[0]?.delta;
+                if (!delta) continue;
+
+                // Reasoning / Thought streaming
+                if (delta.reasoning_content) {
+                  fullThought += delta.reasoning_content;
+                  thinkingBox.style.display = 'block';
+                  thinkingContent.textContent = fullThought;
+                  chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+
+                // Normal content streaming
+                if (delta.content) {
+                  fullText += delta.content;
+                  textBubble.textContent = fullText;
+                  chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+              } catch (e) {}
+            }
+          }
+        }
+
+        conversation.push({ role: 'assistant', content: fullText });
+      } catch (err) {
+        textBubble.textContent = `⚠️ Terjadi kesalahan: ${err.message}`;
+        textBubble.style.color = '#ef4444';
+      } finally {
+        isGenerating = false;
+        btnSend.disabled = false;
+      }
+    }
+
+    function appendMessage(role, text, isStream = false) {
+      const row = document.createElement('div');
+      row.className = `message-row ${role}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = `avatar avatar-${role === 'user' ? 'user' : 'bot'}`;
+      avatar.textContent = role === 'user' ? '👤' : '✨';
+
+      const contentWrapper = document.createElement('div');
+      contentWrapper.className = 'message-content';
+
+      if (role === 'assistant') {
+        const thinkingBox = document.createElement('div');
+        thinkingBox.className = 'thinking-box';
+        thinkingBox.style.display = 'none';
+
+        const thinkingHeader = document.createElement('div');
+        thinkingHeader.className = 'thinking-header';
+        thinkingHeader.innerHTML = `
+          <div class="thinking-title">
+            <span>🧠</span>
+            <span>Penalaran yang diperluas (Thinking)</span>
+          </div>
+          <span class="thinking-chevron">▼</span>
+        `;
+        thinkingHeader.addEventListener('click', () => {
+          thinkingBox.classList.toggle('collapsed');
+        });
+
+        const thinkingContent = document.createElement('div');
+        thinkingContent.className = 'thinking-content';
+
+        thinkingBox.appendChild(thinkingHeader);
+        thinkingBox.appendChild(thinkingContent);
+        contentWrapper.appendChild(thinkingBox);
+      }
+
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+      bubble.textContent = text;
+      contentWrapper.appendChild(bubble);
+
+      if (role === 'user') {
+        row.appendChild(contentWrapper);
+        row.appendChild(avatar);
+      } else {
+        row.appendChild(avatar);
+        row.appendChild(contentWrapper);
+      }
+
+      chatContainer.appendChild(row);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      return row;
+    }
+  </script>
+</body>
+</html>

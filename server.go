@@ -40,6 +40,8 @@ func newServer(cfg *Config, client *gemini.Client, logger *slog.Logger) *Server 
 func (s *Server) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleHealth)
+	mux.HandleFunc("GET /chat", s.handleUI)
+	mux.HandleFunc("GET /playground", s.handleUI)
 	mux.HandleFunc("GET /v1/models", s.handleModels)
 	mux.HandleFunc("GET /v1beta/models", s.handleModelsGoogle)
 	mux.Handle("POST /v1/chat/completions", s.withAuth(s.handleChat))
@@ -113,7 +115,17 @@ func (s *Server) authorized(r *http.Request) bool {
 
 // ─── Simple endpoints ────────────────────────────────────────────────────────
 
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleUI(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(uiHTML))
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.Header.Get("Accept"), "text/html") {
+		s.handleUI(w, r)
+		return
+	}
 	sendJSON(w, http.StatusOK, healthResponse{
 		Status:  "ok",
 		Version: version,
