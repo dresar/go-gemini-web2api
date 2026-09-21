@@ -613,6 +613,7 @@ func parseWrbLineWithThought(line string) (texts []string, thoughts []string) {
 	if err := json.Unmarshal([]byte(innerStr), &inner2); err != nil {
 		return nil, nil
 	}
+	imgMap := extractGeneratedImages(inner2)
 	inner2Slice, ok := inner2.([]any)
 	if !ok || len(inner2Slice) <= 4 {
 		return nil, nil
@@ -629,6 +630,9 @@ func parseWrbLineWithThought(line string) (texts []string, thoughts []string) {
 		if ts, ok := ps[1].([]any); ok {
 			for _, t := range ts {
 				if s, ok := t.(string); ok && s != "" {
+					for ph, u := range imgMap {
+						s = strings.ReplaceAll(s, ph, fmt.Sprintf("![Generated Image](%s)", u))
+					}
 					texts = append(texts, s)
 				}
 			}
@@ -645,6 +649,56 @@ func parseWrbLineWithThought(line string) (texts []string, thoughts []string) {
 		}
 	}
 	return texts, thoughts
+}
+
+// extractGeneratedImages walks the inner2 JSON structure and maps image_generation_content
+// placeholder URLs to actual high-resolution Google user content URLs (https://lh3.googleusercontent.com/gg-dl/...).
+func extractGeneratedImages(node any) map[string]string {
+	imgMap := make(map[string]string)
+	var walk func(v any)
+	walk = func(v any) {
+		if v == nil {
+			return
+		}
+		switch val := v.(type) {
+		case []any:
+			var ph, imgURL string
+			var findURLAndPH func(sub any)
+			findURLAndPH = func(sub any) {
+				if sub == nil {
+					return
+				}
+				switch s := sub.(type) {
+				case string:
+					trimmed := strings.TrimSpace(s)
+					if strings.Contains(trimmed, "image_generation_content") {
+						ph = trimmed
+					} else if strings.HasPrefix(trimmed, "https://lh3.googleusercontent.com/") {
+						imgURL = trimmed
+					}
+				case []any:
+					for _, item := range s {
+						findURLAndPH(item)
+					}
+				}
+			}
+			for _, item := range val {
+				findURLAndPH(item)
+			}
+			if ph != "" && imgURL != "" {
+				imgMap[ph] = imgURL
+			}
+			for _, item := range val {
+				walk(item)
+			}
+		case map[string]any:
+			for _, item := range val {
+				walk(item)
+			}
+		}
+	}
+	walk(node)
+	return imgMap
 }
 
 // indexSlice returns arr[i] as a []any if possible.

@@ -45,6 +45,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /v1/models", s.handleModels)
 	mux.HandleFunc("GET /v1beta/models", s.handleModelsGoogle)
 	mux.Handle("POST /v1/chat/completions", s.withAuth(s.handleChat))
+	mux.Handle("POST /v1/images/generations", s.withAuth(s.handleImageGenerations))
 	mux.Handle("POST /v1/responses", s.withAuth(s.handleResponses))
 	mux.Handle("POST /v1/messages", s.withAuth(s.handleMessages))
 	mux.Handle("POST /v1/messages/count_tokens", s.withAuth(s.handleCountTokens))
@@ -709,3 +710,108 @@ func writeSSEDone(w http.ResponseWriter, f http.Flusher) {
 	_, _ = io.WriteString(w, "data: [DONE]\n\n")
 	f.Flush()
 }
+
+// ─── OpenAI Images Generations ────────────────────────────────────────────────
+
+// ImageGenerationRequest represents a request to /v1/images/generations.
+type ImageGenerationRequest struct {
+	Prompt         string `json:"prompt"`
+	Model          string `json:"model,omitempty"`
+	N              int    `json:"n,omitempty"`
+	Size           string `json:"size,omitempty"`
+	ResponseFormat string `json:"response_format,omitempty"`
+}
+
+// ImageGenerationResponse is the OpenAI image generation response format.
+type ImageGenerationResponse struct {
+	Created int64            `json:"created"`
+	Data    []ImageURLObject `json:"data"`
+}
+
+// ImageURLObject holds a single generated image item.
+type ImageURLObject struct {
+	URL           string `json:"url,omitempty"`
+	B64JSON       string `json:"b64_json,omitempty"`
+	RevisedPrompt string `json:"revised_prompt,omitempty"`
+}
+
+var mdImageRe = regexp.MustCompile(`!\[.*?\]\((https?://[^\s\)]+)\)`)
+var directImageRe = regexp.MustCompile(`https://lh3\.googleusercontent\.com/[^\s"'\)\\]+`)
+
+func extractImageURLsFromText(text string) []string {
+	var urls []string
+	seen := make(map[string]bool)
+	for _, m := range mdImageRe.FindAllStringSubmatch(text, -1) {
+		if len(m) > 1 && !seen[m[1]] {
+			urls = append(urls, m[1])
+			seen[m[1]] = true
+		}
+	}
+	if len(urls) == 0 {
+		for _, u := range directImageRe.FindAllString(text, -1) {
+			if !seen[u] {
+				urls = append(urls, u)
+				seen[u] = true
+			}
+		}
+	}
+	return urls
+}
+
+func (s *Server) handleImageGenerations(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(w, r)
+	if err != nil {
+		sendError(w, bodyErrorStatus(err), "invalid body: "+err.Error())
+		return
+	}
+	var req ImageGenerationRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		sendError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.Prompt == "" {
+		sendError(w, http.StatusBadRequest, "prompt is required")
+		return
+	}
+
+	modelName := req.Model
+	if modelName == "" {
+		modelName = "gemini-3.1-pro-thinking"
+	}
+	model := s.client.ResolveModelOrDefault(modelName)
+	prompt := req.Prompt
+	lower := strings.ToLower(prompt)
+	if !strings.HasPrefix(lower, "generate an image") && !strings.HasPrefix(lower, "create an image") && !strings.HasPrefix(lower, "draw") && !strings.HasPrefix(lower, "gambarkan") && !strings.HasPrefix(lower, "buatkan gambar") {
+		prompt = "Create an image: " + prompt
+	}
+	p := gemini.GenParams{
+		Prompt: prompt,
+		Model:  model,
+	}
+
+	res, err := s.client.GenerateResponse(r.Context(), p)
+	if err != nil {
+		sendError(w, http.StatusBadGateway, "upstream error: "+err.Error())
+		return
+	}
+
+	urls := extractImageURLsFromText(res.Text)
+	if len(urls) == 0 {
+		sendError(w, http.StatusBadGateway, "no image returned by Gemini: "+res.Text)
+		return
+	}
+
+	data := make([]ImageURLObject, 0, len(urls))
+	for _, u := range urls {
+		data = append(data, ImageURLObject{
+			URL:           u,
+			RevisedPrompt: res.Thought,
+		})
+	}
+
+	sendJSON(w, http.StatusOK, ImageGenerationResponse{
+		Created: time.Now().Unix(),
+		Data:    data,
+	})
+}
+

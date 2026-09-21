@@ -314,6 +314,26 @@ func TestCleanGeminiTextCardContent(t *testing.T) {
 	}
 }
 
+func TestExtractGeneratedImages(t *testing.T) {
+	fakeNode := []any{
+		[]any{
+			[]any{
+				[]any{
+					nil, 1, "test.jpg", "https://lh3.googleusercontent.com/gg-dl/SAMPLE_IMAGE_URL",
+				},
+			},
+			[]any{
+				"http://googleusercontent.com/image_generation_content/0_123",
+			},
+		},
+	}
+	m := extractGeneratedImages(fakeNode)
+	expectedURL := "https://lh3.googleusercontent.com/gg-dl/SAMPLE_IMAGE_URL"
+	if m["http://googleusercontent.com/image_generation_content/0_123"] != expectedURL {
+		t.Errorf("expected placeholder to map to %q, got %v", expectedURL, m)
+	}
+}
+
 func TestExtractResponseTextLongest(t *testing.T) {
 	// The complete answer is the longest cumulative snapshot, even if a shorter
 	// snapshot appears on a later line.

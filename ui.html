@@ -456,6 +456,91 @@
       opacity: 0.6;
     }
 
+    .btn-icon {
+      background: transparent;
+      color: #94a3b8;
+      border: 1px solid transparent;
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+
+    .btn-icon:hover {
+      background: #1e293b;
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .image-preview-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: #141b2b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .image-preview-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+    }
+
+    .chat-generated-img {
+      max-width: 100%;
+      max-height: 460px;
+      border-radius: 8px;
+      display: block;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      cursor: zoom-in;
+      transition: opacity 0.2s;
+    }
+
+    .chat-generated-img:hover {
+      opacity: 0.95;
+    }
+
+    .img-preview-card {
+      position: relative;
+      display: inline-block;
+      margin: 10px 0;
+    }
+
+    .img-badge {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(4px);
+      color: #38bdf8;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      pointer-events: none;
+    }
+
+    .user-attached-thumb {
+      max-width: 180px;
+      max-height: 140px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      display: block;
+      object-fit: cover;
+      border: 1px solid var(--user-border);
+    }
+
     .footer-note {
       text-align: center;
       font-size: 11px;
@@ -525,9 +610,11 @@
       <div class="status-card" style="font-size: 11.5px; line-height: 1.5;">
         <strong style="color: #f1f5f9; margin-bottom: 2px;">⚡ Fitur Terpasang:</strong>
         <div>• <strong>Penalaran yang diperluas</strong> (*Chain-of-Thought*)</div>
+        <div>• <strong>Image Generation</strong> (*Imagen 3 Ultra*)</div>
+        <div>• <strong>Vision Multimodal</strong> (*Upload JPG/PNG*)</div>
         <div>• Streaming SSE Token real-time</div>
-        <div>• Endpoint OpenAI `/v1/chat/completions`</div>
-        <div>• Endpoint Anthropic `/v1/messages`</div>
+        <div>• OpenAI `/v1/chat/completions` & `/v1/images/generations`</div>
+        <div>• Anthropic `/v1/messages`</div>
       </div>
     </div>
 
@@ -563,6 +650,10 @@
         </p>
 
         <div class="quick-prompts">
+          <button class="quick-btn" data-prompt="Gambarkan seekor kucing oranye lucu mengenakan kacamata hitam di pantai tropis saat matahari terbenam dengan kualitas sinematik.">
+            🎨 <strong>Generate Gambar (Imagen 3)</strong>
+            <div style="font-size: 11px; color: #8e9bb2; margin-top:2px;">Uji pembuatan gambar visual</div>
+          </button>
           <button class="quick-btn" data-prompt="Pecahkan teka-teki: Petani, serigala, kambing, kubis mau menyeberang sungai dengan perahu yang hanya muat petani dan 1 bawaan. Bagaimana langkah-langkah detailnya?">
             🧩 <strong>Teka-Teki Logika Petani</strong>
             <div style="font-size: 11px; color: #8e9bb2; margin-top:2px;">Uji penalaran yang diperluas</div>
@@ -575,17 +666,26 @@
             💻 <strong>Coding Server Golang</strong>
             <div style="font-size: 11px; color: #8e9bb2; margin-top:2px;">Uji kemampuan coding</div>
           </button>
-          <button class="quick-btn" data-prompt="Jelaskan konsep komputasi kuantum dalam bahasa sederhana untuk anak umur 10 tahun.">
-            🌌 <strong>Fisika Kuantum Sederhana</strong>
-            <div style="font-size: 11px; color: #8e9bb2; margin-top:2px;">Uji penyederhanaan konsep</div>
-          </button>
         </div>
       </div>
     </div>
 
     <footer class="chat-footer">
+      <div id="image-preview-container" class="image-preview-bar" style="display: none;">
+        <img id="image-preview-img" class="image-preview-thumb" src="" alt="preview" />
+        <div style="flex-grow:1; font-size:12px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="image-preview-name">image.png</div>
+        <button id="btn-remove-image" class="btn-icon" style="width:24px; height:24px; font-size:11px;" title="Hapus lampiran gambar">✕</button>
+      </div>
       <div class="input-wrapper">
-        <textarea id="prompt-input" placeholder="Tanyakan apapun ke Gemini (Tekan Enter untuk kirim, Shift+Enter untuk baris baru)..." rows="1"></textarea>
+        <input type="file" id="image-file-input" accept="image/png, image/jpeg, image/webp" style="display:none;" />
+        <button id="btn-attach" class="btn-icon" title="Lampirkan Gambar (Vision Multimodal)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+        </button>
+        <textarea id="prompt-input" placeholder="Tanyakan apapun ke Gemini atau minta gambar/analisis foto..." rows="1"></textarea>
         <button id="btn-send" class="btn-send" title="Kirim">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -608,6 +708,15 @@
     const welcomeScreen = document.getElementById('welcome-screen');
     const activeModelName = document.getElementById('active-model-name');
 
+    // Multimodal image upload elements
+    const btnAttach = document.getElementById('btn-attach');
+    const imageFileInput = document.getElementById('image-file-input');
+    const imagePreviewContainer = document.getElementById('image-preview-container');
+    const imagePreviewImg = document.getElementById('image-preview-img');
+    const imagePreviewName = document.getElementById('image-preview-name');
+    const btnRemoveImage = document.getElementById('btn-remove-image');
+
+    let currentAttachedImage = null; // { name, dataUrl }
     let conversation = [];
     let isGenerating = false;
 
@@ -615,6 +724,37 @@
       const selectedOption = modelSelect.options[modelSelect.selectedIndex];
       activeModelName.textContent = selectedOption.text.replace(/^[^\s]+ /, '');
     });
+
+    // Image attachment handlers
+    btnAttach.addEventListener('click', () => {
+      imageFileInput.click();
+    });
+
+    imageFileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        currentAttachedImage = {
+          name: file.name,
+          dataUrl: event.target.result
+        };
+        imagePreviewImg.src = currentAttachedImage.dataUrl;
+        imagePreviewName.textContent = currentAttachedImage.name;
+        imagePreviewContainer.style.display = 'flex';
+      };
+      reader.readAsDataURL(file);
+    });
+
+    btnRemoveImage.addEventListener('click', clearImageAttachment);
+
+    function clearImageAttachment() {
+      currentAttachedImage = null;
+      imageFileInput.value = '';
+      imagePreviewImg.src = '';
+      imagePreviewContainer.style.display = 'none';
+    }
 
     document.querySelectorAll('.quick-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -629,6 +769,7 @@
       chatContainer.appendChild(welcomeScreen);
       welcomeScreen.style.display = 'flex';
       promptInput.value = '';
+      clearImageAttachment();
     });
 
     promptInput.addEventListener('keydown', (e) => {
@@ -640,19 +781,76 @@
 
     btnSend.addEventListener('click', sendMessage);
 
+    // Lightweight markdown & image parser
+    function renderMarkdown(raw) {
+      if (!raw) return '';
+      let text = raw;
+
+      // Escape basic HTML
+      text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // Markdown images: ![alt](url)
+      text = text.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s\)]+)\)/g, (match, alt, url) => {
+        return `<div class="img-preview-card">
+          <a href="${url}" target="_blank" rel="noopener noreferrer" title="Klik untuk membuka gambar resolusi penuh">
+            <img src="${url}" alt="${alt || 'Generated Image'}" class="chat-generated-img" loading="lazy" />
+          </a>
+          <div class="img-badge">✨ Imagen 3 Ultra</div>
+        </div>`;
+      });
+
+      // Bare Google User Content gg-dl URLs if not already matched
+      text = text.replace(/(^|[^"'])(https:\/\/lh3\.googleusercontent\.com\/gg-dl\/[^\s"'\<\>]+)/g, (match, prefix, url) => {
+        return `${prefix}<div class="img-preview-card">
+          <a href="${url}" target="_blank" rel="noopener noreferrer" title="Klik untuk membuka gambar resolusi penuh">
+            <img src="${url}" alt="Generated Image" class="chat-generated-img" loading="lazy" />
+          </a>
+          <div class="img-badge">✨ Imagen 3 Ultra</div>
+        </div>`;
+      });
+
+      // Code blocks ```code```
+      text = text.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        return `<pre><code>${code.trim()}</code></pre>`;
+      });
+
+      // Inline code `code`
+      text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Bold **bold**
+      text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+      return text;
+    }
+
     async function sendMessage() {
       const text = promptInput.value.trim();
-      if (!text || isGenerating) return;
+      if ((!text && !currentAttachedImage) || isGenerating) return;
 
       if (welcomeScreen) {
         welcomeScreen.style.display = 'none';
       }
 
-      // Add user message
-      conversation.push({ role: 'user', content: text });
-      appendMessage('user', text);
+      const promptToSend = text || (currentAttachedImage ? 'Jelaskan dan analisis gambar ini secara mendalam' : '');
+      const imageToSend = currentAttachedImage ? currentAttachedImage.dataUrl : null;
+
+      // Add user message to conversation history
+      if (imageToSend) {
+        conversation.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: promptToSend },
+            { type: 'image_url', image_url: { url: imageToSend } }
+          ]
+        });
+      } else {
+        conversation.push({ role: 'user', content: promptToSend });
+      }
+
+      appendMessage('user', promptToSend, false, imageToSend);
       promptInput.value = '';
       promptInput.style.height = '40px';
+      clearImageAttachment();
 
       // Prepare assistant row
       const assistantRow = appendMessage('assistant', '', true);
@@ -711,7 +909,7 @@
                 // Normal content streaming
                 if (delta.content) {
                   fullText += delta.content;
-                  textBubble.textContent = fullText;
+                  textBubble.innerHTML = renderMarkdown(fullText);
                   chatContainer.scrollTop = chatContainer.scrollHeight;
                 }
               } catch (e) {}
@@ -719,6 +917,7 @@
           }
         }
 
+        textBubble.innerHTML = renderMarkdown(fullText);
         conversation.push({ role: 'assistant', content: fullText });
       } catch (err) {
         textBubble.textContent = `⚠️ Terjadi kesalahan: ${err.message}`;
@@ -729,7 +928,7 @@
       }
     }
 
-    function appendMessage(role, text, isStream = false) {
+    function appendMessage(role, text, isStream = false, attachedImgUrl = null) {
       const row = document.createElement('div');
       row.className = `message-row ${role}`;
 
@@ -766,9 +965,19 @@
         contentWrapper.appendChild(thinkingBox);
       }
 
+      // If user uploaded an image
+      if (attachedImgUrl) {
+        const imgThumb = document.createElement('img');
+        imgThumb.src = attachedImgUrl;
+        imgThumb.className = 'user-attached-thumb';
+        contentWrapper.appendChild(imgThumb);
+      }
+
       const bubble = document.createElement('div');
       bubble.className = 'message-bubble';
-      bubble.textContent = text;
+      if (text) {
+        bubble.innerHTML = renderMarkdown(text);
+      }
       contentWrapper.appendChild(bubble);
 
       if (role === 'user') {

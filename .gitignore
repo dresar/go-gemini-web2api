@@ -1,10 +1,17 @@
 # Build output
 /go-gemini-web2api
 *.exe
+*.exe~
 
-# Local config
-.env
+# Local credentials & config (DO NOT COMMIT)
+.env*
+cookie.txt
+cookies.txt
+*.cookie
 *.txt
+*.pem
+*.key
 
-# Editor / OS
+# Editor / OS / Logs
 .DS_Store
+*.log

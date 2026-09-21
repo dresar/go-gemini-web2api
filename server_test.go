@@ -245,3 +245,25 @@ func TestMessagesAuthGate(t *testing.T) {
 		t.Errorf("status = %d, want 401", rr.Code)
 	}
 }
+
+func TestExtractImageURLsFromText(t *testing.T) {
+	text := "Here is your picture:\n![Generated Image](https://lh3.googleusercontent.com/gg-dl/AAQ_wbHZwfMWBAea4HIw)\nEnjoy!"
+	urls := extractImageURLsFromText(text)
+	if len(urls) != 1 || urls[0] != "https://lh3.googleusercontent.com/gg-dl/AAQ_wbHZwfMWBAea4HIw" {
+		t.Fatalf("unexpected extracted urls: %v", urls)
+	}
+}
+
+func TestImagesGenerationsAuthGate(t *testing.T) {
+	cfg := testConfig()
+	cfg.APIKeys = []string{"sk-test"}
+	s := newTestServer(t, cfg)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", strings.NewReader(`{}`))
+	s.handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rr.Code)
+	}
+}
+
