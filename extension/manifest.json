@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Gemini Cookie Exporter for Web2API",
+  "version": "1.0.0",
+  "description": "Ekspor cookie Gemini Web (__Secure-1PSID, __Secure-1PSIDTS, SAPISID) untuk go-gemini-web2api dengan 1-klik.",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Gemini Cookie Exporter",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "permissions": [
+    "cookies"
+  ],
+  "host_permissions": [
+    "*://*.google.com/*",
+    "*://gemini.google.com/*"
+  ]
+}

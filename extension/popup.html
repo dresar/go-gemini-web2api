@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Cookie Exporter</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-group">
+        <div class="logo-icon">✨</div>
+        <div class="logo-text">
+          <h1>Gemini Exporter</h1>
+          <span class="sub-label">go-gemini-web2api</span>
+        </div>
+      </div>
+      <div id="status-pill" class="status-badge checking">
+        <span class="dot"></span>
+        <span id="status-text">Memeriksa...</span>
+      </div>
+    </header>
+
+    <!-- Cookie Status Card -->
+    <div class="card cookie-detection">
+      <div class="card-title">Status Cookie Sesi</div>
+      <div class="cookie-grid">
+        <div class="cookie-item" id="item-psid">
+          <span class="cookie-indicator"></span>
+          <span class="cookie-name">__Secure-1PSID</span>
+          <span class="cookie-state">-</span>
+        </div>
+        <div class="cookie-item" id="item-psidts">
+          <span class="cookie-indicator"></span>
+          <div class="cookie-name-group">
+            <span class="cookie-name">__Secure-1PSIDTS</span>
+            <span class="tag-required">Wajib Auto-Refresh</span>
+          </div>
+          <span class="cookie-state">-</span>
+        </div>
+        <div class="cookie-item" id="item-sapisid">
+          <span class="cookie-indicator"></span>
+          <div class="cookie-name-group">
+            <span class="cookie-name">SAPISID</span>
+            <span class="tag-required">Auth Hash</span>
+          </div>
+          <span class="cookie-state">-</span>
+        </div>
+        <div class="cookie-item" id="item-psidcc">
+          <span class="cookie-indicator"></span>
+          <span class="cookie-name">__Secure-1PSIDCC</span>
+          <span class="cookie-state">-</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output Preview Section -->
+    <div class="card preview-card">
+      <div class="tab-header">
+        <button class="tab-btn active" data-tab="raw">Raw String</button>
+        <button class="tab-btn" data-tab="env">.env Format</button>
+        <button class="tab-btn" data-tab="txt">cookie.txt</button>
+      </div>
+      <div class="textarea-wrapper">
+        <textarea id="output-box" readonly placeholder="Mencari cookie Google Gemini..."></textarea>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-grid">
+      <button id="btn-copy" class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        Salin Cookie
+      </button>
+      <button id="btn-download" class="btn btn-secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Download cookie.txt
+      </button>
+    </div>
+
+    <!-- Quick Utilities -->
+    <div class="footer-actions">
+      <button id="btn-open-gemini" class="link-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+        Buka gemini.google.com
+      </button>
+      <button id="btn-test-api" class="link-btn">
+        <span id="api-dot" class="mini-dot"></span>
+        <span id="api-text">Cek Server (127.0.0.1:8081)</span>
+      </button>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Berhasil disalin!</div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
